@@ -78,4 +78,5 @@ jobs:
           docker push "$IMAGE:$SHA_TAG"
 
       - name: Summary
-        run: echo "Imagem publicada: \`$IMAGE:$VERSION_TAG\`" >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          echo "Imagem publicada: $IMAGE:$VERSION_TAG" >> "$GITHUB_STEP_SUMMARY"
