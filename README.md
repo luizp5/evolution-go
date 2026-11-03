@@ -1,3 +1,5 @@
+> **Fork da [Evolution Go](https://github.com/evolution-foundation/evolution-go) com a biblioteca do WhatsApp em dia.** A versão do WhatsApp fica compilada na imagem e é recusada com `Client outdated (405)` depois de uns 4 meses. Para renovar, rode o workflow **Publish image**. Imagem: `ghcr.io/luizp5/evolution-go`.
+
 <p align="center">
   <a href="https://evolutionfoundation.com.br">
     <img src="./public/hover-evolution.png" alt="Evolution Foundation" />

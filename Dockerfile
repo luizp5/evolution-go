@@ -1,4 +1,4 @@
-FROM golang:1.25.0-alpine AS build
+FROM golang:1.27.3-alpine AS build
 
 RUN apk update && apk add --no-cache git build-base libjpeg-turbo-dev libwebp-dev
 
@@ -15,6 +15,8 @@ RUN go mod download
 COPY . .
 
 ARG VERSION=dev
+RUN go test ./...
+
 RUN CGO_ENABLED=1 go build -ldflags "-X main.version=${VERSION}" -o server ./cmd/evolution-go
 
 FROM alpine:3.19.1 AS final

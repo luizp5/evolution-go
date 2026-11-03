@@ -1,0 +1,81 @@
+# Atualiza a whatsmeow e publica a imagem em ghcr.io/<dono>/evolution-go.
+#
+# A versão do WhatsApp fica compilada na whatsmeow, e o WhatsApp recusa as que
+# passam de uns 4 meses com "Client outdated (405)". Rode este workflow antes
+# disso: ele traz a whatsmeow pedida, grava go.mod e go.sum nesta branch e
+# publica a imagem com a tag <VERSION>-wa<versão do WhatsApp>.
+#
+# Não publica em nenhuma instalação: a troca da imagem é feita à mão.
+name: Publish image
+
+on:
+  workflow_dispatch:
+    inputs:
+      whatsmeow:
+        description: Commit da whatsmeow (main = o mais recente; vazio = o do go.mod)
+        default: main
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: 1.27.3
+
+      - name: Update whatsmeow
+        if: inputs.whatsmeow != ''
+        env:
+          WHATSMEOW: ${{ inputs.whatsmeow }}
+        run: |
+          go get "go.mau.fi/whatsmeow@${WHATSMEOW}"
+          go mod tidy
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add go.mod go.sum
+          git diff --cached --quiet || git commit -m "deps: whatsmeow ${WHATSMEOW}"
+          git push
+
+      - name: Resolve image name
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          lib="$(go list -m -f '{{.Dir}}' go.mau.fi/whatsmeow)"
+          wa="$(sed -n 's/^var waVersion = WAVersionContainer{[0-9]*, [0-9]*, \([0-9]*\)}$/\1/p' "$lib/store/clientpayload.go")"
+          test -n "$wa"
+          echo "IMAGE=ghcr.io/${owner}/evolution-go" >> "$GITHUB_ENV"
+          echo "VERSION_TAG=$(cat VERSION)-wa${wa}" >> "$GITHUB_ENV"
+          echo "SHA_TAG=sha-$(git rev-parse --short=7 HEAD)" >> "$GITHUB_ENV"
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build image
+        run: |
+          docker build --progress plain \
+            --build-arg VERSION="$(cat VERSION)" \
+            --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            --label "org.opencontainers.image.version=${VERSION_TAG}" \
+            --tag "$IMAGE:$VERSION_TAG" --tag "$IMAGE:$SHA_TAG" .
+
+      # Biblioteca que faltar na imagem final derruba o servidor ao subir.
+      - name: Verify image
+        run: |
+          docker run --rm --entrypoint sh "$IMAGE:$SHA_TAG" -c '! ldd /app/server 2>&1 | grep -i "error\|not found"'
+
+      - name: Push image
+        run: |
+          docker push "$IMAGE:$VERSION_TAG"
+          docker push "$IMAGE:$SHA_TAG"
+
+      - name: Summary
+        run: echo "Imagem publicada: \`$IMAGE:$VERSION_TAG\`" >> "$GITHUB_STEP_SUMMARY"
